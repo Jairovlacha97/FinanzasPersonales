@@ -1,0 +1,44 @@
+# ==========================================
+# Entorno Virtual
+# ==========================================
+.venv/
+venv/
+env/
+
+# ==========================================
+# Secretos y Configuración Sensible (¡CRÍTICO!)
+# ==========================================
+.streamlit/secrets.toml
+.env
+
+# ==========================================
+# Archivos de caché de Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# Configuración del Editor (VSCode)
+# ==========================================
+.vscode/
+*.swp
+*.swo
+
+# ==========================================
+# Archivos del Sistema Operativo
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ==========================================
+# Herramientas de análisis y testeo
+# ==========================================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/

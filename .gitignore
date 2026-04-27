@@ -33,6 +33,7 @@ __pycache__/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+CLAUDE.md
 
 # ==========================================
 # Herramientas de análisis y testeo
@@ -42,3 +43,4 @@ Desktop.ini
 htmlcov/
 .tox/
 .mypy_cache/
+sql/

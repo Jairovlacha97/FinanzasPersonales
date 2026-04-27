@@ -18,8 +18,51 @@ df_pagos_deudas = srv.obtener_pagos_deudas()
 df_movs_ahorro = srv.obtener_movimientos_ahorro()
 df_trans_inv = srv.obtener_transacciones_inversion()
 
-# --- 1. SECCIÓN MENSUAL: FLUJO DE CAJA ---
-st.header(f"📅 Flujo de Caja - {datetime.date.today().strftime('%B %Y').capitalize()}")
+ym_actual = srv._ym_actual()
+
+# =====================================================================
+# SECCIÓN 0: ALERTA DEL MES — ¿Cuánto falta por cubrir?
+# =====================================================================
+st.header(f"🎯 Plan del mes — {datetime.date.today().strftime('%B %Y').capitalize()}")
+st.caption("Basado en tus recurrentes, presupuestos y cuotas de deuda proyectadas.")
+
+try:
+    prevision_mes = srv.calcular_prevision_mes(ym_actual, meses_historico=3)
+    tot = prevision_mes["totales"]
+    ing_plan = tot["ingresos"]
+    gas_plan = tot["gastos"]
+    aho_plan = tot["ahorros"]
+    inv_plan = tot["inversiones"]
+    deu_plan = tot["pagos_deuda"] + tot["intereses_deuda"]
+    comprometido_plan = gas_plan + aho_plan + inv_plan + deu_plan
+    flujo_plan = tot["flujo_neto"]
+
+    cp1, cp2, cp3, cp4 = st.columns(4)
+    cp1.metric("💵 Ingresos esperados", f"${ing_plan:,.0f}")
+    cp2.metric("🛍️ Gastos planeados", f"${gas_plan:,.0f}")
+    cp3.metric("💳 Cuotas de deuda", f"${deu_plan:,.0f}")
+    cp4.metric(
+        "🟢 Margen disponible" if flujo_plan >= 0 else "🚨 Déficit proyectado",
+        f"${flujo_plan:,.0f}" if flujo_plan >= 0 else f"-${abs(flujo_plan):,.0f}",
+        delta_color="normal" if flujo_plan >= 0 else "inverse",
+        delta=None,
+    )
+
+    if ing_plan > 0:
+        pct_plan = min(comprometido_plan / ing_plan, 1.0)
+        st.progress(pct_plan, text=f"{pct_plan*100:.0f}% de los ingresos esperados ya están comprometidos este mes")
+
+    if flujo_plan < 0:
+        st.error(f"⚠️ Según tu plan, este mes te faltarían **${abs(flujo_plan):,.0f}**. Ve al **Planificador** para ajustar.")
+    elif flujo_plan > 0:
+        st.success(f"✅ Con tu plan actual te sobran **${flujo_plan:,.0f}** este mes. Puedes destinarlo a ahorro extra o amortización.")
+except Exception:
+    st.info("Configura tus items recurrentes para ver la proyección del mes aquí.")
+
+st.divider()
+
+# --- 1. SECCIÓN MENSUAL: FLUJO DE CAJA REAL ---
+st.header(f"📅 Flujo de Caja Real - {datetime.date.today().strftime('%B %Y').capitalize()}")
 
 ingresos_mes = df_ingresos_mes['Valor'].sum() if not df_ingresos_mes.empty else 0.0
 gastos_mes = df_gastos_mes['Valor'].sum() if not df_gastos_mes.empty else 0.0
@@ -119,4 +162,4 @@ if not datos_composicion.empty:
     
     st.altair_chart(barras_comp + texto_comp, use_container_width=True)
 else:
-    st.info("A medida que registres ahorros, inversiones y deudas, aquí verás la radiografía de tu patrimonio.")
+    st.info("A medida que registres ahorros, inversiones y deudas, aquí verás la radiografía detu patrimonio.")

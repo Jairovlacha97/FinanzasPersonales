@@ -65,22 +65,22 @@ try:
     total_comprometido = gas_plan + gas_no_esp + aho_plan + inv_plan + deu_plan
     flujo_plan = ing_plan - total_comprometido
 
-    # --- Fila 1: ingresos | gastos esperados | gastos no esperados | cuotas deuda ---
-    cp1, cp2, cp3, cp4 = st.columns(4)
-    cp1.metric("💵 Ingresos esperados",  f"${ing_plan:,.0f}")
-    cp2.metric("🛍️ Gastos esperados",    f"${gas_plan:,.0f}",
-               help="Recurrentes de tipo gasto")
-    cp3.metric("💸 Gastos no esperados", f"${gas_no_esp:,.0f}",
-               help="Presupuestos del mes cuya categoria no esta en recurrentes")
-    cp4.metric("💳 Cuotas deuda",        f"${deu_plan:,.0f}",
-               help="Recurrentes de tipo pago_deuda")
+    # Una sola fila: Ingresos | divisor | Egresos (5 items) | divisor | Superávit
+    div = '<div style="border-left:2px solid #e0e0e0;height:70px;margin:12px auto;"></div>'
 
-    # --- Fila 2: ahorro | inversiones | superavit/deficit ---
-    cp5, cp6, cp7 = st.columns(3)
-    cp5.metric("💰 Ahorro esperado",       f"${aho_plan:,.0f}")
-    cp6.metric("📈 Inversiones esperadas", f"${inv_plan:,.0f}")
-    cp7.metric(
-        "🟢 Superávit proyectado" if flujo_plan >= 0 else "🚨 Déficit proyectado",
+    c_ing, c_s1, c_e1, c_e2, c_e3, c_e4, c_e5, c_s2, c_sup = st.columns(
+        [2.5, 0.15, 2, 2, 2, 2, 2, 0.15, 2.5]
+    )
+    c_ing.metric("💵 Ingresos esperados", f"${ing_plan:,.0f}")
+    c_s1.markdown(div, unsafe_allow_html=True)
+    c_e1.metric("🛍️ Gastos",        f"${gas_plan:,.0f}",    help="Recurrentes tipo gasto")
+    c_e2.metric("💸 Imprevistos",    f"${gas_no_esp:,.0f}",  help="Presupuestos no cubiertos por recurrentes")
+    c_e3.metric("💳 Cuotas deuda",   f"${deu_plan:,.0f}",    help="Recurrentes tipo pago_deuda")
+    c_e4.metric("💰 Ahorro",         f"${aho_plan:,.0f}")
+    c_e5.metric("📈 Inversiones",    f"${inv_plan:,.0f}")
+    c_s2.markdown(div, unsafe_allow_html=True)
+    c_sup.metric(
+        "🟢 Superávit" if flujo_plan >= 0 else "🚨 Déficit",
         f"${flujo_plan:,.0f}" if flujo_plan >= 0 else f"-${abs(flujo_plan):,.0f}",
         delta_color="normal" if flujo_plan >= 0 else "inverse",
         delta=None,

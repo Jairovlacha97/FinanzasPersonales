@@ -39,21 +39,15 @@ def registrar_gasto(gasto: Gasto):
 
 
 # --- FUNCIONES DE LECTURA ---
-def obtener_gastos_mes_actual() -> pd.DataFrame:
-    """Consulta Supabase filtrando por el rango del mes actual."""
-    hoy = datetime.date.today()
-    primer_dia = hoy.replace(day=1)
-    if hoy.month == 12:
-        proximo_mes = hoy.replace(year=hoy.year + 1, month=1, day=1)
-    else:
-        proximo_mes = hoy.replace(month=hoy.month + 1, day=1)
-
+def obtener_gastos_por_mes(year_month: str) -> pd.DataFrame:
+    """Consulta Supabase filtrando por un mes específico (YYYY-MM)."""
+    primer_dia = _ym_to_first_day(year_month)
+    proximo_mes = _ym_to_first_day(_next_ym(year_month))
     respuesta = supabase.table("gastos").select("*") \
         .gte("fecha", str(primer_dia)) \
         .lt("fecha", str(proximo_mes)) \
         .order("fecha", desc=True) \
         .execute()
-
     df = pd.DataFrame(respuesta.data)
     if not df.empty:
         df = df.rename(columns={
@@ -67,6 +61,10 @@ def obtener_gastos_mes_actual() -> pd.DataFrame:
     else:
         df = pd.DataFrame(columns=['Fecha', 'Categoría', 'Descripción', 'Valor', 'Tarjeta'])
     return df
+
+def obtener_gastos_mes_actual() -> pd.DataFrame:
+    """Alias de compatibilidad — devuelve gastos del mes actual."""
+    return obtener_gastos_por_mes(_ym_actual())
 
 def obtener_descripciones_unicas() -> list:
     """Consulta Supabase y devuelve una lista alfabética de descripciones (locales) únicas."""
@@ -192,13 +190,10 @@ def registrar_ingreso(ingreso: Ingreso):
     }
     supabase.table("ingresos").insert(datos).execute()
 
-def obtener_ingresos_mes_actual() -> pd.DataFrame:
-    hoy = datetime.date.today()
-    primer_dia = hoy.replace(day=1)
-    if hoy.month == 12:
-        proximo_mes = hoy.replace(year=hoy.year + 1, month=1, day=1)
-    else:
-        proximo_mes = hoy.replace(month=hoy.month + 1, day=1)
+def obtener_ingresos_por_mes(year_month: str) -> pd.DataFrame:
+    """Consulta Supabase filtrando por un mes específico (YYYY-MM)."""
+    primer_dia = _ym_to_first_day(year_month)
+    proximo_mes = _ym_to_first_day(_next_ym(year_month))
     respuesta = supabase.table("ingresos").select("*") \
         .gte("fecha", str(primer_dia)) \
         .lt("fecha", str(proximo_mes)) \
@@ -217,6 +212,10 @@ def obtener_ingresos_mes_actual() -> pd.DataFrame:
     else:
         df = pd.DataFrame(columns=['Fecha', 'Categoría', 'Descripción', 'Valor', 'Cuenta Destino'])
     return df
+
+def obtener_ingresos_mes_actual() -> pd.DataFrame:
+    """Alias de compatibilidad — devuelve ingresos del mes actual."""
+    return obtener_ingresos_por_mes(_ym_actual())
 
 
 # --- TIPO DE CAMBIO ---
@@ -814,4 +813,3 @@ def consumo_real_por_categoria(year_month: str) -> pd.DataFrame:
             filas.append({"tipo": "inversion", "categoria": nombre, "real": monto})
 
     return pd.DataFrame(filas) if filas else pd.DataFrame(columns=["tipo", "categoria", "real"])
-

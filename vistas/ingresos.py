@@ -5,104 +5,107 @@ import altair as alt
 import services as srv
 from models import Ingreso
 
-st.title("💵 Registro de Ingresos - Mes Actual")
+st.title("💵 Ingresos")
+
+ym_actual = srv._ym_actual()
+
+# --- SELECTOR DE MES ---
+opciones_meses = []
+cursor = ym_actual
+for _ in range(13):
+    opciones_meses.append(cursor)
+    cursor = srv._prev_ym(cursor)
+
+col_mes, col_info = st.columns([2, 3])
+ym_sel = col_mes.selectbox("📅 Mes", opciones_meses, index=0, key="ingresos_mes_sel")
+es_mes_actual = (ym_sel == ym_actual)
+
+if not es_mes_actual:
+    col_info.info(f"📂 Consultando historial de **{ym_sel}**. El formulario de registro está disponible al final de la página.")
 
 # --- CARGA DE DATOS MAESTROS ---
 df_cuentas_maestras = srv.obtener_cuentas()
 if not df_cuentas_maestras.empty:
     mapa_cuentas = {f"{row['nombre']} ({row['tipo']})": row['nombre'] for _, row in df_cuentas_maestras.iterrows()}
 else:
-    mapa_cuentas = {"Efectivo (Débito)": "Efectivo"} 
+    mapa_cuentas = {"Efectivo (Débito)": "Efectivo"}
 lista_opciones_cuentas = list(mapa_cuentas.keys())
 
-# --- FORMULARIO DE REGISTRO ---
-st.header("📥 Registrar Nuevo Ingreso")
+categorias_ingreso = srv.obtener_categorias_por_tipo("ingreso")
+if not categorias_ingreso:
+    categorias_ingreso = [
+        "Nómina Pricesmart",
+        "Dividendos Galvanoplast J & N",
+        "Rendimientos Financieros",
+        "Ventas Libres",
+        "Regalos / Devoluciones",
+        "Otros Ingresos"
+    ]
 
-with st.form("form_registro_ingreso", clear_on_submit=True):
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        fecha_input = st.date_input("Fecha", datetime.date.today())
-        categoria_input = st.selectbox(
-            "Categoría de Ingreso", 
-            [
-                "Nómina Pricesmart", 
-                "Dividendos Galvanoplast J & N", 
-                "Rendimientos Financieros", 
-                "Ventas Libres",
-                "Regalos / Devoluciones",
-                "Otros Ingresos"
-            ]
-        )
-        
-    with col2:
-        descripcion_input = st.text_input("Descripción / Concepto", placeholder="Ej: Quincena 1, Utilidades Q1...")
-        
-    with col3:
-        valor_input = st.number_input("Valor ($)", min_value=0.0, step=50000.0)
-        cuenta_input_display = st.selectbox("¿A qué cuenta entró el dinero?", lista_opciones_cuentas)
-        
-    submit_btn = st.form_submit_button("Registrar Ingreso")
-
-    if submit_btn:
-        if valor_input > 0 and descripcion_input.strip() != "":
-            cuenta_real = mapa_cuentas[cuenta_input_display]
-
-            nuevo_ingreso = Ingreso(
-                fecha=fecha_input,
-                categoria=categoria_input,
-                descripcion=descripcion_input,
-                valor=valor_input,
-                cuenta_destino=cuenta_real
-            )
-            
-            srv.registrar_ingreso(nuevo_ingreso)
-            st.success("✅ Ingreso registrado correctamente.")
-            st.rerun() 
-        else:
-            st.warning("⚠️ Debes ingresar una descripción válida y un valor mayor a 0.")
-
-st.divider()
-
-# --- DATOS Y CÁLCULOS DEL MES ---
-st.header(f"📊 Resumen de {datetime.date.today().strftime('%B %Y').capitalize()}")
-
-df_mes = srv.obtener_ingresos_mes_actual()
+# --- DATOS DEL MES SELECCIONADO ---
+df_mes = srv.obtener_ingresos_por_mes(ym_sel)
 total_ingresos = df_mes['Valor'].sum() if not df_mes.empty else 0
 
-st.metric("Total Ingresado en el Mes", f"${total_ingresos:,.0f}")
+# --- RESUMEN RÁPIDO ---
+st.header(f"📊 Resumen de {ym_sel}")
+st.metric("Total ingresado en el mes", f"${total_ingresos:,.0f}")
 st.write("")
 
-# --- GRÁFICOS Y TABLA DE HISTORIAL ---
+# --- GRÁFICOS Y TABLA ---
 col_grafico, col_tabla = st.columns([1, 1])
 
 with col_grafico:
-    st.subheader("📈 Ingresos por Categoría")
+    st.subheader("📈 Por Categoría")
     if not df_mes.empty:
-        df_agrupado_cat = df_mes.groupby('Categoría')['Valor'].sum().reset_index()
-        
-        # Gráfico de barras horizontales Altair
-        base_cat = alt.Chart(df_agrupado_cat).encode(
+        df_agrupado = df_mes.groupby('Categoría')['Valor'].sum().reset_index()
+        base = alt.Chart(df_agrupado).encode(
             x=alt.X('Valor:Q', title='', axis=None),
             y=alt.Y('Categoría:N', sort='-x', title='')
         )
-        barras_cat = base_cat.mark_bar(color='#2ca02c') # Color verde para ingresos
-        texto_cat = base_cat.mark_text(
-            align='left',
-            baseline='middle',
-            dx=3
-        ).encode(
+        barras = base.mark_bar(color='#2ca02c')
+        texto = base.mark_text(align='left', baseline='middle', dx=3).encode(
             text=alt.Text('Valor:Q', format='$,.0f')
         )
-        st.altair_chart(barras_cat + texto_cat, use_container_width=True)
-        
+        st.altair_chart(barras + texto, use_container_width=True)
     else:
-        st.write("Aún no hay ingresos registrados este mes.")
+        st.write("No hay ingresos registrados para este mes.")
 
 with col_tabla:
-    st.subheader("🗂️ Historial de Entradas")
+    st.subheader("🗂️ Historial de entradas")
     if not df_mes.empty:
-        df_mes_sorted = df_mes.sort_values(by='Fecha', ascending=False)
-        st.dataframe(df_mes_sorted, use_container_width=True, hide_index=True)
+        st.dataframe(df_mes.sort_values(by='Fecha', ascending=False), use_container_width=True, hide_index=True)
     else:
         st.write("No hay transacciones registradas este mes.")
+
+st.divider()
+
+# --- FORMULARIO DE REGISTRO (colapsado cuando se ve un mes anterior) ---
+with st.expander("📥 Registrar nuevo ingreso", expanded=es_mes_actual):
+    with st.form("form_registro_ingreso", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            primer_dia_sel = srv._ym_to_first_day(ym_sel)
+            fecha_input = st.date_input("Fecha", datetime.date.today() if es_mes_actual else primer_dia_sel)
+            categoria_input = st.selectbox("Categoría de Ingreso", categorias_ingreso)
+
+        with col2:
+            descripcion_input = st.text_input("Descripción / Concepto", placeholder="Ej: Quincena 1, Utilidades Q1...")
+
+        with col3:
+            valor_input = st.number_input("Valor ($)", min_value=0.0, step=50000.0)
+            cuenta_input_display = st.selectbox("¿A qué cuenta entró?", lista_opciones_cuentas)
+
+        if st.form_submit_button("Registrar Ingreso"):
+            if valor_input > 0 and descripcion_input.strip() != "":
+                srv.registrar_ingreso(Ingreso(
+                    fecha=fecha_input,
+                    categoria=categoria_input,
+                    descripcion=descripcion_input,
+                    valor=valor_input,
+                    cuenta_destino=mapa_cuentas[cuenta_input_display]
+                ))
+                st.success("✅ Ingreso registrado correctamente.")
+                st.rerun()
+            else:
+                st.warning("⚠️ Debes ingresar una descripción válida y un valor mayor a 0.")

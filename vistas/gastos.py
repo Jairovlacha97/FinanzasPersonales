@@ -5,9 +5,23 @@ import altair as alt
 import services as srv
 from models import Gasto, Presupuesto
 
-st.title("💸 Registro de Gastos - Mes Actual")
+st.title("💸 Gastos")
 
 ym_actual = srv._ym_actual()
+
+# --- SELECTOR DE MES ---
+opciones_meses = []
+cursor = ym_actual
+for _ in range(13):   # mes actual + 12 meses atrás
+    opciones_meses.append(cursor)
+    cursor = srv._prev_ym(cursor)
+
+col_mes, col_info = st.columns([2, 3])
+ym_sel = col_mes.selectbox("📅 Mes", opciones_meses, index=0, key="gastos_mes_sel")
+es_mes_actual = (ym_sel == ym_actual)
+
+if not es_mes_actual:
+    col_info.info(f"📂 Consultando historial de **{ym_sel}**. El formulario de registro está disponible al final de la página.")
 
 # --- CARGA DE DATOS MAESTROS Y MAPEO ---
 df_cuentas_maestras = srv.obtener_cuentas()
@@ -31,10 +45,10 @@ if not categorias_gasto:
     ]
 
 # --- BARRA LATERAL: Presupuestos del mes (persistentes) ---
-st.sidebar.header("⚙️ Presupuestos del Mes")
-st.sidebar.caption(f"Mes en curso: **{ym_actual}**")
+st.sidebar.header("⚙️ Presupuestos")
+st.sidebar.caption(f"Mes seleccionado: **{ym_sel}**")
 
-df_presupuestos = srv.obtener_presupuestos(ym_actual, tipo="gasto")
+df_presupuestos = srv.obtener_presupuestos(ym_sel, tipo="gasto")
 mapa_presupuesto = {row["categoria"]: float(row["monto"]) for _, row in df_presupuestos.iterrows()} if not df_presupuestos.empty else {}
 
 # --- Botón estrella: generar presupuestos desde historial ---
@@ -43,21 +57,21 @@ st.sidebar.caption("Calcula el promedio de tus gastos reales de los últimos mes
 meses_hist_sidebar = st.sidebar.selectbox("Meses de historial", [3, 6, 9], index=0, key="meses_hist_gen")
 if st.sidebar.button("📊 Poblar presupuestos automáticamente", use_container_width=True, type="primary"):
     try:
-        prev = srv.calcular_prevision_mes(ym_actual, meses_historico=meses_hist_sidebar)
+        prev = srv.calcular_prevision_mes(ym_sel, meses_historico=meses_hist_sidebar)
         detalle_prev = prev["detalle"]
         creados = 0
         for item in detalle_prev:
             if item["tipo"] != "gasto":
                 continue
             srv.guardar_presupuesto(Presupuesto(
-                year_month=ym_actual,
+                year_month=ym_sel,
                 categoria=item["categoria"],
                 tipo="gasto",
                 monto=float(item["monto"]),
                 nota=f"Auto desde historial {meses_hist_sidebar}m ({item['origen']})",
             ))
             creados += 1
-        st.sidebar.success(f"✅ {creados} presupuestos generados para {ym_actual}.")
+        st.sidebar.success(f"✅ {creados} presupuestos generados para {ym_sel}.")
         st.rerun()
     except Exception as e:
         st.sidebar.error(f"Error al generar: {e}")
@@ -66,20 +80,20 @@ st.sidebar.divider()
 
 with st.sidebar.expander("✏️ Editar presupuesto por categoría", expanded=False):
     cat_pres = st.selectbox("Categoría", categorias_gasto, key="cat_pres_sidebar")
-    valor_actual = mapa_presupuesto.get(cat_pres, 0.0)
+    valor_actual_pres = mapa_presupuesto.get(cat_pres, 0.0)
     monto_pres = st.number_input(
-        "Monto presupuestado ($)", min_value=0.0, value=float(valor_actual),
+        "Monto presupuestado ($)", min_value=0.0, value=float(valor_actual_pres),
         step=50000.0, key="monto_pres_sidebar"
     )
     if st.button("Guardar", use_container_width=True, key="btn_guardar_pres"):
         srv.guardar_presupuesto(Presupuesto(
-            year_month=ym_actual, categoria=cat_pres, tipo="gasto", monto=monto_pres
+            year_month=ym_sel, categoria=cat_pres, tipo="gasto", monto=monto_pres
         ))
         st.success(f"Presupuesto de '{cat_pres}' guardado.")
         st.rerun()
 
 if st.sidebar.button("📋 Copiar presupuestos del mes anterior", use_container_width=True):
-    n = srv.copiar_presupuestos_de_mes(srv._prev_ym(ym_actual), ym_actual)
+    n = srv.copiar_presupuestos_de_mes(srv._prev_ym(ym_sel), ym_sel)
     if n > 0:
         st.success(f"Se copiaron {n} presupuestos del mes anterior.")
         st.rerun()
@@ -97,54 +111,49 @@ st.sidebar.caption(
     "💡 Para ver la previsión de meses futuros ve al **Planificador del Mes**."
 )
 
-# --- FORMULARIO DE REGISTRO ---
-st.header("📝 Registrar Nuevo Gasto")
+# --- FORMULARIO DE REGISTRO (siempre disponible, colapsado al ver meses anteriores) ---
+with st.expander("📝 Registrar nuevo gasto", expanded=es_mes_actual):
+    with st.form("form_registro", clear_on_submit=True):
+        col1, col2, col3 = st.columns(3)
 
-with st.form("form_registro", clear_on_submit=True):
-    col1, col2, col3 = st.columns(3)
+        with col1:
+            primer_dia_sel = srv._ym_to_first_day(ym_sel)
+            fecha_input = st.date_input("Fecha", datetime.date.today() if es_mes_actual else primer_dia_sel)
+            categoria_input = st.selectbox("Categoría", categorias_gasto)
 
-    with col1:
-        fecha_input = st.date_input("Fecha", datetime.date.today())
-        categoria_input = st.selectbox("Categoría", categorias_gasto)
+        with col2:
+            historial_locales = srv.obtener_descripciones_unicas()
+            opciones_local = ["➕ Escribir nuevo local..."] + historial_locales
+            local_seleccionado = st.selectbox("Descripción / Local", opciones_local)
+            local_nuevo = st.text_input("Nombre del nuevo local (Si elegiste ➕)")
 
-    with col2:
-        historial_locales = srv.obtener_descripciones_unicas()
-        opciones_local = ["➕ Escribir nuevo local..."] + historial_locales
-        local_seleccionado = st.selectbox("Descripción / Local", opciones_local)
-        local_nuevo = st.text_input("Nombre del nuevo local (Si elegiste ➕)")
+        with col3:
+            valor_input = st.number_input("Valor ($)", min_value=0.0, step=5000.0)
+            tarjeta_input_display = st.selectbox("Medio de pago", lista_opciones_tarjetas)
 
-    with col3:
-        valor_input = st.number_input("Valor ($)", min_value=0.0, step=5000.0)
-        tarjeta_input_display = st.selectbox("Medio de pago", lista_opciones_tarjetas)
+        submit_btn = st.form_submit_button("Registrar Gasto")
 
-    submit_btn = st.form_submit_button("Registrar Gasto")
-
-    if submit_btn:
-        descripcion_final = local_nuevo if local_seleccionado == "➕ Escribir nuevo local..." else local_seleccionado
-
-        if valor_input > 0 and descripcion_final.strip() != "":
-            tarjeta_real = mapa_cuentas[tarjeta_input_display]
-
-            nuevo_gasto = Gasto(
-                fecha=fecha_input,
-                categoria=categoria_input,
-                descripcion=descripcion_final,
-                valor=valor_input,
-                tarjeta=tarjeta_real
-            )
-
-            srv.registrar_gasto(nuevo_gasto)
-            st.success("✅ Gasto registrado en Supabase correctamente.")
-            st.rerun()
-        else:
-            st.warning("⚠️ Debes ingresar una descripción válida y un valor mayor a 0.")
+        if submit_btn:
+            descripcion_final = local_nuevo if local_seleccionado == "➕ Escribir nuevo local..." else local_seleccionado
+            if valor_input > 0 and descripcion_final.strip() != "":
+                srv.registrar_gasto(Gasto(
+                    fecha=fecha_input,
+                    categoria=categoria_input,
+                    descripcion=descripcion_final,
+                    valor=valor_input,
+                    tarjeta=mapa_cuentas[tarjeta_input_display]
+                ))
+                st.success("✅ Gasto registrado correctamente.")
+                st.rerun()
+            else:
+                st.warning("⚠️ Debes ingresar una descripción válida y un valor mayor a 0.")
 
 st.divider()
 
-# --- DATOS Y CÁLCULOS DEL MES ---
-st.header(f"📊 Resumen de {datetime.date.today().strftime('%B %Y').capitalize()}")
+# --- DATOS Y CÁLCULOS DEL MES SELECCIONADO ---
+st.header(f"📊 Resumen de {ym_sel}")
 
-df_mes = srv.obtener_gastos_mes_actual()
+df_mes = srv.obtener_gastos_por_mes(ym_sel)
 total_general = df_mes['Valor'].sum() if not df_mes.empty else 0
 
 st.metric("Total Gastado en el Mes (Consolidado)", f"${total_general:,.0f}")
@@ -229,7 +238,7 @@ if not df_mes.empty:
                 st.metric("Gastado", f"${row['Valor']:,.0f}")
                 if st.button("➕ Fijar presupuesto", key=f"add_pres_{row['Categoría']}"):
                     srv.guardar_presupuesto(Presupuesto(
-                        year_month=ym_actual,
+                        year_month=ym_sel,
                         categoria=row['Categoría'],
                         tipo="gasto",
                         monto=float(row['Valor']),

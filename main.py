@@ -42,7 +42,6 @@ else:
     
     # Definimos TODAS nuestras páginas
     pg_dashboard = st.Page("vistas/dashboard_global.py", title="Dashboard Principal", icon="🏠")
-    pg_previsiones = st.Page("vistas/previsiones.py", title="Previsiones", icon="🔮")
     pg_ingresos = st.Page("vistas/ingresos.py", title="Ingresos", icon="💵")
     pg_gastos = st.Page("vistas/gastos.py", title="Gastos", icon="💸")
     pg_deudas = st.Page("vistas/deudas.py", title="Deudas", icon="💳")
@@ -53,7 +52,6 @@ else:
     # El orden aquí dicta cómo aparecen en el menú izquierdo (El primero es el Home)
     pg = st.navigation([
         pg_dashboard,
-        pg_previsiones,
         pg_ingresos,
         pg_gastos,
         pg_deudas,

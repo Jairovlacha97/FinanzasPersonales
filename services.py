@@ -329,12 +329,13 @@ def copiar_presupuestos_de_mes(year_month_origen: str, year_month_destino: str):
         return 0
     filas = []
     for _, r in df.iterrows():
+        nota = r.get("nota")
         filas.append({
             "year_month": year_month_destino,
             "categoria": r["categoria"],
             "tipo": r["tipo"],
             "monto": float(r["monto"]),
-            "nota": r.get("nota"),
+            "nota": None if nota is None or pd.isna(nota) else nota,
         })
     supabase.table("presupuestos").upsert(
         filas, on_conflict="year_month,categoria,tipo"
